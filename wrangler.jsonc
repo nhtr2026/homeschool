@@ -12,7 +12,7 @@
     {
       "binding": "DB",
       "database_name": "homeschool",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "4c0cbea4-151a-464d-b391-cddc8556cbdc",
       "migrations_dir": "migrations"
     }
   ],
