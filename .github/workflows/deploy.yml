@@ -1,0 +1,60 @@
+name: Deploy to Cloudflare
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      admin_password:
+        description: "Parent PIN for the very first sign-in (only used if no logins exist yet)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Resolve D1 database id
+        run: |
+          set -e
+          if grep -q REPLACE_WITH_D1_DATABASE_ID wrangler.jsonc; then
+            ID=$(npx wrangler@4 d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const l=JSON.parse(s);const d=l.find(x=>x.name==="homeschool");console.log(d?d.uuid:"")})')
+            if [ -z "$ID" ]; then
+              npx wrangler@4 d1 create homeschool
+              ID=$(npx wrangler@4 d1 list --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const l=JSON.parse(s);const d=l.find(x=>x.name==="homeschool");console.log(d?d.uuid:"")})')
+            fi
+            echo "Database id: $ID"
+            sed -i "s/REPLACE_WITH_D1_DATABASE_ID/$ID/" wrangler.jsonc
+          fi
+
+      - name: Apply migrations
+        run: npx wrangler@4 d1 migrations apply homeschool --remote
+
+      - name: Deploy
+        run: npx wrangler@4 deploy
+
+      - name: First-login PIN (only used if no logins exist yet)
+        run: |
+          PW="${{ github.event.inputs.admin_password }}"
+          if [ -z "$PW" ]; then PW="${{ secrets.INITIAL_ADMIN_PASSWORD }}"; fi
+          if [ -z "$PW" ]; then PW="1234"; fi
+          echo "$PW" | npx wrangler@4 secret put ADMIN_PASSWORD
+
+      - name: Commit database id back to the repo
+        run: |
+          if ! git diff --quiet wrangler.jsonc; then
+            git config user.name "github-actions"
+            git config user.email "actions@github.com"
+            git add wrangler.jsonc
+            git commit -m "chore: record D1 database id"
+            git push
+          fi
