@@ -16,7 +16,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.HOMESCHOOL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
